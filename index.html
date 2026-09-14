@@ -1,0 +1,197 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Blackjack">
+<title>Blackjack</title>
+<style>
+  * { box-sizing: border-box; margin:0; padding:0; -webkit-tap-highlight-color: transparent; user-select:none; }
+  html, body { height:100%; }
+  body {
+    background: radial-gradient(ellipse at center, #1b5e3a 0%, #0d3320 65%, #071f14 100%);
+    color:#fff;
+    font-family: -apple-system, sans-serif;
+    display:flex;
+    flex-direction:column;
+    justify-content:space-between;
+    overflow:hidden;
+    padding: calc(20px + env(safe-area-inset-top)) 16px calc(16px + env(safe-area-inset-bottom)) 16px;
+  }
+  .section { text-align:center; padding:10px 0; }
+  .label { font-size:13px; letter-spacing:1.5px; text-transform:uppercase; color:rgba(255,255,255,0.65); }
+  .label span { color:#f4d35e; font-weight:700; }
+  .hand { display:flex; justify-content:center; gap:10px; flex-wrap:wrap; margin:14px 0; min-height:96px; align-items:center; }
+  .card {
+    width:64px; height:92px;
+    background:#fdfdfd;
+    border-radius:8px;
+    box-shadow:0 4px 10px rgba(0,0,0,0.4);
+    display:flex;
+    flex-direction:column;
+    align-items:center;
+    justify-content:center;
+    text-align:center;
+    font-weight:700;
+    color:#1a1a1a;
+    flex-shrink:0;
+    gap:4px;
+  }
+  .card.red { color:#c0392b; }
+  .card .rank { font-size:22px; line-height:1; width:100%; text-align:center; }
+  .card .suit { font-size:26px; line-height:1; width:100%; text-align:center; }
+  .card.back {
+    background: repeating-linear-gradient(45deg, #1a3a6b, #1a3a6b 6px, #24488a 6px, #24488a 12px);
+    border:2px solid #d4af37;
+  }
+  .message { text-align:center; font-size:23px; font-weight:800; min-height:32px; color:#f4d35e; }
+  .actions { display:flex; gap:14px; justify-content:center; padding:14px 0 6px; }
+  button { border:none; border-radius:14px; font-size:17px; font-weight:700; -webkit-tap-highlight-color:transparent; }
+  #hitBtn, #standBtn { flex:1; max-width:160px; padding:17px 0; }
+  #hitBtn { background:#f4d35e; color:#1a1a1a; }
+  #standBtn { background:#2c2c2e; color:#fff; border:1px solid rgba(255,255,255,0.25); }
+  #newRoundBtn {
+    display:none;
+    background:#4a90d9; color:#fff;
+    padding:16px 34px;
+    margin:6px auto 0;
+  }
+</style>
+</head>
+<body>
+
+<div class="section">
+  <div class="label">Dealer · <span id="dealerTotal">?</span></div>
+  <div class="hand" id="dealerCards"></div>
+</div>
+
+<div class="message" id="message"></div>
+
+<div class="section">
+  <div class="hand" id="playerCards"></div>
+  <div class="label">You · <span id="playerTotal">0</span></div>
+</div>
+
+<div class="actions" id="actions">
+  <button id="hitBtn">Hit</button>
+  <button id="standBtn">Stand</button>
+</div>
+<button id="newRoundBtn">Deal Again</button>
+
+<script>
+let deck = [];
+let playerHand = [];
+let dealerHand = [];
+let roundOver = false;
+
+const dealerCardsEl = document.getElementById('dealerCards');
+const playerCardsEl = document.getElementById('playerCards');
+const dealerTotalEl = document.getElementById('dealerTotal');
+const playerTotalEl = document.getElementById('playerTotal');
+const msgEl = document.getElementById('message');
+const actionsEl = document.getElementById('actions');
+const newRoundBtn = document.getElementById('newRoundBtn');
+
+function newDeck() {
+  const suits = ['♠','♥','♦','♣'];
+  const ranks = ['A','2','3','4','5','6','7','8','9','10','J','Q','K'];
+  let d = [];
+  for (const s of suits) for (const r of ranks) d.push({ r, s });
+  for (let i = d.length - 1; i > 0; i--) {
+    let j = Math.floor(Math.random() * (i + 1));
+    [d[i], d[j]] = [d[j], d[i]];
+  }
+  return d;
+}
+
+function handValue(cards) {
+  let total = 0, aces = 0;
+  for (const c of cards) {
+    if (c.r === 'A') { total += 11; aces++; }
+    else if (c.r === 'J' || c.r === 'Q' || c.r === 'K') total += 10;
+    else total += parseInt(c.r);
+  }
+  while (total > 21 && aces > 0) { total -= 10; aces--; }
+  return total;
+}
+
+function renderHand(el, cards, hideFirst) {
+  el.innerHTML = '';
+  cards.forEach((c, i) => {
+    let div = document.createElement('div');
+    if (hideFirst && i === 0) {
+      div.className = 'card back';
+    } else {
+      let isRed = c.s === '♥' || c.s === '♦';
+      div.className = 'card' + (isRed ? ' red' : '');
+      div.innerHTML = `<div class="rank">${c.r}</div><div class="suit">${c.s}</div>`;
+    }
+    el.appendChild(div);
+  });
+}
+
+function render() {
+  renderHand(playerCardsEl, playerHand, false);
+  renderHand(dealerCardsEl, dealerHand, !roundOver);
+  playerTotalEl.textContent = handValue(playerHand);
+  dealerTotalEl.textContent = roundOver ? handValue(dealerHand) : '?';
+}
+
+function startRound() {
+  if (deck.length < 15) deck = newDeck();
+  playerHand = [deck.pop(), deck.pop()];
+  dealerHand = [deck.pop(), deck.pop()];
+  roundOver = false;
+  msgEl.textContent = '';
+  actionsEl.style.display = 'flex';
+  newRoundBtn.style.display = 'none';
+  render();
+  if (handValue(playerHand) === 21) finishRound();
+}
+
+function hit() {
+  if (roundOver) return;
+  playerHand.push(deck.pop());
+  render();
+  if (handValue(playerHand) > 21) finishRound();
+}
+
+function stand() {
+  if (roundOver) return;
+  finishRound();
+}
+
+function finishRound() {
+  roundOver = true;
+  let p = handValue(playerHand);
+  if (p <= 21) {
+    while (handValue(dealerHand) < 17) dealerHand.push(deck.pop());
+  }
+  render();
+  let d = handValue(dealerHand);
+  let playerBJ = playerHand.length === 2 && p === 21;
+  let dealerBJ = dealerHand.length === 2 && d === 21;
+  let msg;
+  if (p > 21) msg = 'Bust — Dealer wins';
+  else if (playerBJ && dealerBJ) msg = 'Push — both Blackjack';
+  else if (playerBJ) msg = 'Blackjack! You win';
+  else if (dealerBJ) msg = 'Dealer has Blackjack';
+  else if (d > 21) msg = 'Dealer busts — You win!';
+  else if (d > p) msg = 'Dealer wins';
+  else if (p > d) msg = 'You win!';
+  else msg = 'Push';
+  msgEl.textContent = msg;
+  actionsEl.style.display = 'none';
+  newRoundBtn.style.display = 'block';
+}
+
+document.getElementById('hitBtn').onclick = hit;
+document.getElementById('standBtn').onclick = stand;
+newRoundBtn.onclick = startRound;
+
+startRound();
+</script>
+</body>
+</html>
